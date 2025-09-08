@@ -24,8 +24,13 @@ ie 'buy trail' or 'trail close'")]
         public string ManualText { get; set; }
         [Parameter("enable trading", DefaultValue = false)]
         public bool EnableTrading { get; set; }
+        // if set to 0 > use x bars back instead of pips
         [Parameter("trail order line pips", DefaultValue = 41.0)]
         public double TrailOrderLinePips { get; set; }
+        [Parameter("trail order line X bars back", DefaultValue = 3)]
+        public int TrailOrderLineBarsBack { get; set; }
+        [Parameter("trail order line on tf", DefaultValue = "1h")]
+        public string TrailOrderLineTf { get; set; }
         [Parameter("stoploss pips", DefaultValue = 100.0)]
         public double StoplossPips { get; set; }
 
@@ -37,13 +42,14 @@ ie 'buy trail' or 'trail close'")]
         {
             Print($"{DateTime.UtcNow} (utc) aumchi started");
             ui = new AumUI(this);
-            signals = new AumSignals(this, TrailOrderLinePips, EnableTrading, ui);
+            signals = new AumSignals(this, TrailOrderLinePips, TrailOrderLineBarsBack, TrailOrderLineTf, EnableTrading, ui);
             trader = new AumTrader(this, EnableTrading, StoplossPips);
             positions = new AumPositions(this, EnableTrading);
             signals.OnSignal += HandleSignal;
             // subscribe to chart object events
             Chart.ObjectsUpdated += Chart_ObjectsUpdated;
             Chart.ObjectsRemoved += Chart_ObjectsRemoved;
+            // Chart.ObjectHoverChanged += Chart_ObjectHoverChanged;
             // initialize lines already on chart
             signals.ScanLinesOnChart();
         }
@@ -61,7 +67,7 @@ ie 'buy trail' or 'trail close'")]
         {
             // unsubscribe all events
             Chart.ObjectsUpdated -= Chart_ObjectsUpdated;
-            Chart.ObjectsRemoved -= Chart_ObjectsRemoved; // todo ???
+            Chart.ObjectsRemoved -= Chart_ObjectsRemoved;
             Print($"{DateTime.UtcNow} (utc) aumchi stopped");
         }
         // chart event functions
@@ -85,5 +91,15 @@ ie 'buy trail' or 'trail close'")]
                 }
             }
         }
+        // private void Chart_ObjectHoverChanged(ChartObjectHoverChangedEventArgs args)
+        // {
+        //     foreach (var chartObject in args.ChartObject)
+        //     {
+        //         if (chartObject.ObjectType is ChartObjectType.Text)
+        //         {
+        //             robot.Print($"hovered : {chartObject.Name}");
+        //         }
+        //     }
+        // }
     }
 }
