@@ -11,6 +11,7 @@ namespace Aumchi
     {
         buy, sell, alertBuy, alertSell, none // closeBuy, closeSell,
     }
+    public enum SignalKind { buySignal, sellSignal }
     public class LineOrderSpecs
     {
         public ChartTrendLine Line { get; set; }
@@ -20,31 +21,34 @@ namespace Aumchi
     }
     public class Signal
     {
+        public SignalKind Kind { get; set; }
         public TradeType Type { get; set; }
         public double Price { get; set; }
-        public string SourceID { get; set; } // line id
-        public double SuggestedVolumeInUnits { get; set; } = 1;
+        public long SuggestedVolumeInUnits { get; set; }
+        public string Message { get; set; }
     }
     public class AumSignals
     {
         private readonly Robot robot;
+        private readonly bool enableTrading;
         private readonly double trailOrderLinePips;
         private readonly int trailOrderLineBarsBack;
         private readonly string trailOrderLineTf;
-        private readonly bool enableTrading;
+        private readonly string soundFile;
         private readonly AumUI ui;
         private readonly Dictionary<string, LineOrderSpecs> trackedLines = new();
         private ChartStaticText botText;
         private Color botTextColor;
         private TradeType? armedTradeType;
         public event Action<Signal> OnSignal;
-        public AumSignals(Robot robot, double trailOrderLinePips, int trailOrderLineBarsBack, string trailOrderLineTf, bool enableTrading, AumUI ui)
+        public AumSignals(Robot robot, bool enableTrading, double trailOrderLinePips, int trailOrderLineBarsBack, string trailOrderLineTf, string soundFile, AumUI ui)
         {
             this.robot = robot;
             this.trailOrderLinePips = trailOrderLinePips;
             this.trailOrderLineBarsBack = trailOrderLineBarsBack;
             this.trailOrderLineTf = trailOrderLineTf;
             this.enableTrading = enableTrading;
+            this.soundFile = soundFile;
             this.ui = ui;
         }
         // called on init
@@ -248,7 +252,51 @@ namespace Aumchi
                 robot.Print($"t-line '{order_line.Line.Name}' expired at {order_line.Line.Time2} : removed from tracked lines");
                 return;
             }
-            // todo check price vs line & raise onsignal
+            // check line triggered : current price
+            double bid = robot.Symbol.Bid;
+            double ask = robot.Symbol.Ask;
+            // interpolate line price if not horizontal
+            DateTime t1 = order_line.Line.Time1;
+            DateTime t2 = order_line.Line.Time2;
+            double y1 = order_line.Line.Y1;
+            double y2 = order_line.Line.Y2;
+            double lineSlope = (y2 - y1) / (t2 - t1).TotalSeconds;
+            double linePrice = y1 + lineSlope * (lastBarTime - t1).TotalSeconds;
+            // check trigger : buy signal
+            if (order_line.OrderType == OrderType.buy && ask > linePrice)
+            {
+                var sig = new Signal { Kind = SignalKind.buySignal };
+                OnSignal?.Invoke(sig);
+                robot.Print($"{DateTime.UtcNow} (utc) buy hit");
+            }
+            else if (order_line.OrderType == OrderType.alertBuy && ask > linePrice)
+            {
+                PlayAlertSound("buy", ask);
+                robot.Print($"{DateTime.UtcNow} (utc) alert buy hit");
+            }
+            else if (order_line.OrderType == OrderType.sell && bid < linePrice)
+            {
+                var sig = new Signal { Kind = SignalKind.sellSignal };
+                OnSignal?.Invoke(sig);
+                robot.Print($"{DateTime.UtcNow} (utc) sell hit");
+            }
+            else if (order_line.OrderType == OrderType.alertSell && bid < linePrice)
+            {
+                PlayAlertSound("sell", bid);
+                robot.Print($"{DateTime.UtcNow} (utc) alert sell hit");
+            }
+        }
+        private void PlayAlertSound(string alertSignal, double price)
+        {
+            try
+            {
+                robot.Notifications.PlaySound(soundFile);
+                robot.Print($"{DateTime.UtcNow} (utc) alert : {alertSignal} @ {price}");
+            }
+            catch (Exception ex)
+            {
+                robot.Print($"alert sound failed : {ex.Message}");
+            }
         }
     }
 }

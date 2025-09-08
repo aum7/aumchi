@@ -33,6 +33,11 @@ ie 'buy trail' or 'trail close'")]
         public string TrailOrderLineTf { get; set; }
         [Parameter("stoploss pips", DefaultValue = 100.0)]
         public double StoplossPips { get; set; }
+        [Parameter("lots size", DefaultValue = 0.01)]
+        public double LotSize { get; set; }
+        // alert settings (aumchi\aumchi\sounds\alert | bells | siren
+        [Parameter("alert file", DefaultValue = @"C:\Users\mua\Documents\cAlgo\Sources\Robots\aumchi\aumchi\sounds\alert.mp3")]
+        public string SoundFile { get; set; }
 
         private AumUI ui;
         private AumSignals signals;
@@ -42,14 +47,13 @@ ie 'buy trail' or 'trail close'")]
         {
             Print($"{DateTime.UtcNow} (utc) aumchi started");
             ui = new AumUI(this);
-            signals = new AumSignals(this, TrailOrderLinePips, TrailOrderLineBarsBack, TrailOrderLineTf, EnableTrading, ui);
-            trader = new AumTrader(this, EnableTrading, StoplossPips);
-            positions = new AumPositions(this, EnableTrading);
+            signals = new AumSignals(this, EnableTrading, TrailOrderLinePips, TrailOrderLineBarsBack, TrailOrderLineTf, SoundFile, ui);
             signals.OnSignal += HandleSignal;
+            trader = new AumTrader(this, EnableTrading, StoplossPips, LotSize);
+            positions = new AumPositions(this, EnableTrading);
             // subscribe to chart object events
             Chart.ObjectsUpdated += Chart_ObjectsUpdated;
             Chart.ObjectsRemoved += Chart_ObjectsRemoved;
-            // Chart.ObjectHoverChanged += Chart_ObjectHoverChanged;
             // initialize lines already on chart
             signals.ScanLinesOnChart();
         }
@@ -91,15 +95,5 @@ ie 'buy trail' or 'trail close'")]
                 }
             }
         }
-        // private void Chart_ObjectHoverChanged(ChartObjectHoverChangedEventArgs args)
-        // {
-        //     foreach (var chartObject in args.ChartObject)
-        //     {
-        //         if (chartObject.ObjectType is ChartObjectType.Text)
-        //         {
-        //             robot.Print($"hovered : {chartObject.Name}");
-        //         }
-        //     }
-        // }
     }
 }
