@@ -1,0 +1,25 @@
+{
+    "vscode-neovim.compositeKeys": {
+        "jj": {
+            "command": "vscode-neovim.escape",
+        },
+    },
+    "editor.acceptSuggestionOnEnter": "on",
+    "editor.acceptSuggestionOnCommitCharacter": false,
+    "editor.tabCompletion": "on",
+    "editor.suggest.preview": true,
+    "editor.suggest.insertMode": "replace",
+    "[json]": {
+        "editor.formatOnSave": true,
+    },
+    "[jsonc]": {
+        "editor.formatOnSave": true
+    },
+    "[csharp]": {
+        "editor.defaultFormatter": "ms-dotnettools.csharp",
+        "editor.formatOnSave": true
+    },
+    "editor.quickSuggestionsDelay": 1000,
+    "editor.suggest.filterGraceful": true,
+    "editor.cursorBlinking": "solid",
+}
