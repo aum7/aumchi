@@ -20,7 +20,7 @@ namespace Aumchi
         }
         public void ExecuteSignal(Signal signal)
         {
-            // minimal market execution todo stoploss
+            // minimal market execution
             if (!enableTrading)
             {
                 robot.Print($"{DateTime.UtcNow} (utc) aumchi : trading disabled");
@@ -38,6 +38,7 @@ namespace Aumchi
                     return;
             }
             long volume = (long)Math.Max(1, robot.Symbol.QuantityToVolumeInUnits(lotSize));
+            // double? stoploss = stoplossUnits > 0 ? (tradeType == TradeType.Buy ? signal.Price - stoplossUnits : signal.Price + stoplossUnits) : (double?)null;
             double? stoploss = stoplossPips > 0 ? (tradeType == TradeType.Buy ? signal.Price - robot.Symbol.PipSize * stoplossPips : signal.Price + robot.Symbol.PipSize * stoplossPips) : (double?)null;
 
             var result = robot.ExecuteMarketOrder(tradeType, robot.SymbolName, volume, label, stoploss, null);

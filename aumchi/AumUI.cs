@@ -10,9 +10,6 @@ namespace Aumchi
         private StackPanel statusPanel;
         private TextBlock tradingBlock;
         private TextBlock trailingBlock;
-        private readonly Color inactiveColor = Color.DarkGray;
-        private readonly Color buyColor = Color.DodgerBlue;
-        private readonly Color sellColor = Color.Red;
 
         public AumUI(Robot robot)
         {
@@ -28,38 +25,38 @@ namespace Aumchi
                 VerticalAlignment = VerticalAlignment.Bottom,
                 Margin = 10
             };
-            tradingBlock = new TextBlock { Text = "not trading", ForegroundColor = inactiveColor };
-            trailingBlock = new TextBlock { Text = "not trailing", ForegroundColor = inactiveColor };
+            tradingBlock = new TextBlock { Text = "not trading", ForegroundColor = AumStyles.clrInactive };
+            trailingBlock = new TextBlock { Text = "not trailing", ForegroundColor = AumStyles.clrInactive };
             statusPanel.AddChild(tradingBlock);
             statusPanel.AddChild(trailingBlock);
 
             robot.Chart.AddControl(statusPanel);
         }
         // update status panel
-        public void UpdateStatusUI(bool isTrailing, TradeType? armedTradeType, bool enableTrading)
+        public void UpdateStatusUI(bool enableTrading, bool isTrailing, TradeType? armedTradeType)
         {
             // trading block
             if (enableTrading && armedTradeType.HasValue)
             {
                 tradingBlock.Text = "trading";
-                tradingBlock.ForegroundColor = armedTradeType == TradeType.Buy ?
-                buyColor : sellColor;
+                tradingBlock.ForegroundColor = armedTradeType.Value == TradeType.Buy ?
+                AumStyles.clrBuy : AumStyles.clrSell;
             }
             else
             {
                 tradingBlock.Text = "not trading";
-                tradingBlock.ForegroundColor = inactiveColor;
+                tradingBlock.ForegroundColor = AumStyles.clrInactive;
             }
             // trailing block
             if (isTrailing)
             {
                 trailingBlock.Text = "trailing";
-                trailingBlock.ForegroundColor = armedTradeType == TradeType.Buy ? buyColor : sellColor;
+                trailingBlock.ForegroundColor = armedTradeType == TradeType.Buy ? AumStyles.clrBuy : AumStyles.clrSell;
             }
             else
             {
                 trailingBlock.Text = "not trailing";
-                trailingBlock.ForegroundColor = inactiveColor;
+                trailingBlock.ForegroundColor = AumStyles.clrInactive;
             }
         }
     }
