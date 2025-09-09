@@ -3,15 +3,18 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using cAlgo.API;
-using cAlgo.API.Internals;
+using System.Runtime.InteropServices;
 
 namespace Aumchi
 {
     public enum OrderType
     {
-        buy, sell, alertBuy, alertSell, none // closeBuy, closeSell,
+        buy, sell, alertBuy, alertSell, closeBuy, closeSell, none
     }
-    public enum SignalKind { buySignal, sellSignal }
+    public enum SignalKind
+    {
+        buySignal, sellSignal, closeBuySignal, closeSellSignal
+    }
     public class LineOrderSpecs
     {
         public ChartTrendLine Line { get; set; }
@@ -30,7 +33,6 @@ namespace Aumchi
     public class AumSignals
     {
         private readonly Robot robot;
-        private readonly bool enableTrading;
         private readonly bool triggerOrderOnce;
         private readonly double trailOrderLinePips;
         private readonly int trailOrderLineBarsBack;
@@ -41,10 +43,9 @@ namespace Aumchi
         private ChartStaticText botText;
         private TradeType? armedTradeType;
         public event Action<Signal> OnSignal;
-        public AumSignals(Robot robot, bool enableTrading, bool triggerOrderOnce, double trailOrderLinePips, int trailOrderLineBarsBack, TimeFrame trailOrderLineTf, string soundFile, AumUI ui)
+        public AumSignals(Robot robot, bool triggerOrderOnce, double trailOrderLinePips, int trailOrderLineBarsBack, TimeFrame trailOrderLineTf, string soundFile, AumUI ui)
         {
             this.robot = robot;
-            this.enableTrading = enableTrading;
             this.triggerOrderOnce = triggerOrderOnce;
             this.trailOrderLinePips = trailOrderLinePips;
             this.trailOrderLineBarsBack = trailOrderLineBarsBack;
@@ -81,13 +82,10 @@ namespace Aumchi
                 orderLinesDict[line.Name] = order_line;
                 robot.Print($"new order t-line '{line.Name}' with comment '{line.Comment}'");
             }
-            else
+            // print only if comment has changed
+            else if (order_line.Comment != line.Comment)
             {
-                // print only if comment has changed
-                if (order_line.Comment != line.Comment)
-                {
-                    robot.Print($"line '{line.Name}' comment changed to '{line.Comment}'");
-                }
+                robot.Print($"line '{line.Name}' comment changed to '{line.Comment}'");
             }
             // update spec with new comment
             order_line.Line = line;
@@ -96,16 +94,24 @@ namespace Aumchi
             order_line.OrderType = orderType;
             order_line.IsTriggered = isTriggered;
             // update color based on order
-            if (isTriggered) line.Color = AumStyles.clrInactive;
+            if (isTriggered) line.Color = AumStyle.clrInactive;
             else SetLineColor(order_line);
         }
         private OrderType ParseOrderType(string comment)
         {
             var words = comment.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            // if (words.Contains("close") && words.Contains("buy")) return OrderType.closeBuy;
-            // if (words.Contains("close") && words.Contains("sell")) return OrderType.closeSell;
-            if (words.Contains("alert") && words.Contains("buy")) return OrderType.alertBuy;
-            if (words.Contains("alert") && words.Contains("sell")) return OrderType.alertSell;
+            if (words.Contains("close") && words.Contains("buy")) return OrderType.closeBuy;
+            if (words.Contains("close") && words.Contains("sell")) return OrderType.closeSell;
+            if (words.Contains("alert") && words.Contains("buy"))
+            {
+                // armedTradeType = TradeType.Buy;
+                return OrderType.alertBuy;
+            }
+            if (words.Contains("alert") && words.Contains("sell"))
+            {
+                // armedTradeType = TradeType.Sell;
+                return OrderType.alertSell;
+            }
             if (words.Contains("buy"))
             {
                 armedTradeType = TradeType.Buy;
@@ -123,19 +129,23 @@ namespace Aumchi
             }
             return OrderType.none;
         }
-        private void SetLineColor(LineOrderSpecs order_line)
+        private static void SetLineColor(LineOrderSpecs order_line)
         {
             switch (order_line.OrderType)
             {
                 case OrderType.buy:
-                    order_line.Line.Color = AumStyles.clrBuy;
+                    order_line.Line.Color = AumStyle.clrBuy;
                     break;
                 case OrderType.sell:
-                    order_line.Line.Color = AumStyles.clrSell;
+                    order_line.Line.Color = AumStyle.clrSell;
                     break;
                 case OrderType.alertBuy:
                 case OrderType.alertSell:
-                    order_line.Line.Color = AumStyles.clrAlert;
+                    order_line.Line.Color = AumStyle.clrAlert;
+                    break;
+                case OrderType.closeBuy:
+                case OrderType.closeSell:
+                    order_line.Line.Color = AumStyle.clrClose;
                     break;
             }
         }
@@ -172,7 +182,7 @@ namespace Aumchi
                 }
             }
             // manage trail text
-            ui.UpdateStatusUI(enableTrading, isAnyLineTrailing, armedTradeType);
+            ui.UpdateStatusUI(isAnyLineTrailing, armedTradeType);
         }
         // if trend line has comment recognized as order, update ontick
         private void UpdateTrailLine(LineOrderSpecs order_line)
@@ -181,6 +191,7 @@ namespace Aumchi
             // set t-line horizontal for visual recognition of order
             order_line.Line.Y1 = order_line.Line.Y2;
             double marketPrice = order_line.OrderType is OrderType.buy or OrderType.alertBuy ? robot.Symbol.Ask : robot.Symbol.Bid;
+            double marketPriceClose = order_line.OrderType is OrderType.closeBuy ? robot.Symbol.Bid : robot.Symbol.Ask;
             double trailLevel;
             // trail with pips
             if (trailOrderLinePips > 0)
@@ -198,11 +209,23 @@ namespace Aumchi
                     if (marketPrice > trailLevel)
                         order_line.Line.Y1 = order_line.Line.Y2 = marketPrice - offset;
                 }
+                // close orders
+                else if (order_line.OrderType is OrderType.closeBuy)
+                {
+                    trailLevel = order_line.Line.Y1 + offset;
+                    if (marketPriceClose > trailLevel)
+                        order_line.Line.Y1 = order_line.Line.Y2 = marketPriceClose - offset;
+                }
+                else if (order_line.OrderType is OrderType.closeSell)
+                {
+                    trailLevel = order_line.Line.Y1 - offset;
+                    if (marketPriceClose < trailLevel)
+                        order_line.Line.Y1 = order_line.Line.Y2 = marketPriceClose + offset;
+                }
             }
             // trail x bars back on x timeframe
             else
             {
-                // var bars = robot.MarketData.GetBars(selectedTf);
                 var bars = robot.MarketData.GetBars(trailOrderLineTf);
                 int barsAvailable = bars.Count;
                 int lookbackPeriod = Math.Min(trailOrderLineBarsBack, barsAvailable - 1);
@@ -214,18 +237,26 @@ namespace Aumchi
                     // get highest price of last x bars back
                     trailLevel = bars.HighPrices.Skip(barsAvailable - 1 - lookbackPeriod).Take(lookbackPeriod).Max();
                     if (marketPrice < trailLevel)
-                    {
                         order_line.Line.Y1 = order_line.Line.Y2 = trailLevel;
-                    }
                 }
                 else if (order_line.OrderType is OrderType.sell or OrderType.alertSell)
                 {
                     // get lowest price for last x bars back
                     trailLevel = bars.LowPrices.Skip(barsAvailable - 1 - lookbackPeriod).Take(lookbackPeriod).Min();
                     if (marketPrice > trailLevel)
-                    {
                         order_line.Line.Y1 = order_line.Line.Y2 = trailLevel;
-                    }
+                }
+                else if (order_line.OrderType is OrderType.closeBuy)
+                {
+                    trailLevel = bars.LowPrices.Skip(barsAvailable - 1 - lookbackPeriod).Take(lookbackPeriod).Min();
+                    if (marketPriceClose > trailLevel)
+                        order_line.Line.Y1 = order_line.Line.Y2 = trailLevel;
+                }
+                else if (order_line.OrderType is OrderType.closeSell)
+                {
+                    trailLevel = bars.HighPrices.Skip(barsAvailable - 1 - lookbackPeriod).Take(lookbackPeriod).Max();
+                    if (marketPriceClose < trailLevel)
+                        order_line.Line.Y1 = order_line.Line.Y2 = trailLevel;
                 }
             }
         }
@@ -280,6 +311,20 @@ namespace Aumchi
             {
                 PlayAlertSound("sell", bid);
                 robot.Print($"{DateTime.UtcNow} (utc) alert sell hit");
+                wasHit = true;
+            }
+            else if (order_line.OrderType == OrderType.closeBuy && bid < linePrice)
+            {
+                var sig = new Signal { Kind = SignalKind.closeBuySignal };
+                OnSignal?.Invoke(sig);
+                robot.Print($"{DateTime.UtcNow} (utc) close buy hit");
+                wasHit = true;
+            }
+            else if (order_line.OrderType == OrderType.closeSell && ask > linePrice)
+            {
+                var sig = new Signal { Kind = SignalKind.closeSellSignal };
+                OnSignal?.Invoke(sig);
+                robot.Print($"{DateTime.UtcNow} (utc) close sell hit");
                 wasHit = true;
             }
             // update line comment when triggered
