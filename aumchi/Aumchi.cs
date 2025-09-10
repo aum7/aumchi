@@ -42,7 +42,7 @@ ie 'buy trail' or 'trail close'")]
         public int TrailOrderLineBarsBack { get; set; }
         [Parameter("trail order line on tf", DefaultValue = "1h")]
         public TimeFrame TrailOrderLineTf { get; set; }
-        [Parameter("stoploss (pips)", DefaultValue = 100.0)]
+        [Parameter("stoploss (pips)", DefaultValue = 200.0)]
         public double StoplossPips { get; set; }
         [Parameter("lots size", DefaultValue = 0.01)]
         public double LotSize { get; set; }
@@ -61,7 +61,7 @@ ie 'buy trail' or 'trail close'")]
             // Print($"ticksize : {Symbol.TickSize}"); // 0,01
             // Print($"pipsize : {Symbol.PipSize}"); // 0,1
             // debug end
-            ui = new AumUI(this, EnableTrading);
+            ui = new AumUI(this, () => EnableTrading, v => EnableTrading = v);
             signals = new AumSignals(this, TriggerOrderOnce, TrailOrderLinePips, TrailOrderLineBarsBack, TrailOrderLineTf, SoundFile, ui);
             signals.OnSignal += HandleSignal;
             trader = new AumTrader(this, EnableTrading, StoplossPips, LotSize);

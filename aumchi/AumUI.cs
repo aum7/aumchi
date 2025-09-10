@@ -1,4 +1,5 @@
 // aumui.cs
+using System;
 using cAlgo.API;
 
 namespace Aumchi
@@ -6,17 +7,22 @@ namespace Aumchi
     public class AumUI
     {
         private readonly Robot robot;
-        private readonly bool enableTrading;
+        private readonly Func<bool> getEnableTrading;
+        private readonly Action<bool> setEnableTrading;
+        // cache status to refresh ui after toggle
+        private OrderType? currentOrderType;
         // status panel / ui
         private StackPanel statusPanel;
-        private TextBlock tradingBlock;
-        private TextBlock trailingBlock;
+        private Button btnTrade;
+        private Button btnTrail;
 
-        public AumUI(Robot robot, bool enableTrading)
+        public AumUI(Robot robot, Func<bool> getEnableTrading, Action<bool> setEnableTrading)
         {
             this.robot = robot;
-            this.enableTrading = enableTrading;
+            this.getEnableTrading = getEnableTrading;
+            this.setEnableTrading = setEnableTrading;
             InitStatusUI();
+            UpdateStatusUI(false, null);
         }
         // initialize status panel
         private void InitStatusUI()
@@ -24,41 +30,62 @@ namespace Aumchi
             statusPanel = new StackPanel
             {
                 HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Bottom,
+                VerticalAlignment = VerticalAlignment.Top,
                 Margin = 10
             };
-            tradingBlock = new TextBlock { Text = "not trading", ForegroundColor = AumStyle.clrInactive };
-            trailingBlock = new TextBlock { Text = "not trailing", ForegroundColor = AumStyle.clrInactive };
-            statusPanel.AddChild(tradingBlock);
-            statusPanel.AddChild(trailingBlock);
+            btnTrade = new Button
+            {
+                Text = "TRADE",
+                BackgroundColor = AumStyle.clrInactive,
+                Margin = new Thickness(0, 0, 0, 5)
+            };
+            btnTrade.Click += delegate
+            {
+                // toggle enable trading
+                bool newVal = !getEnableTrading();
+                setEnableTrading(newVal);
+                UpdateStatusUI(false, null);
+            };
+            btnTrail = new Button
+            {
+                Text = "TRAIL",
+                BackgroundColor = AumStyle.clrInactive,
+            };
+            statusPanel.AddChild(btnTrade);
+            statusPanel.AddChild(btnTrail);
 
             robot.Chart.AddControl(statusPanel);
         }
         // update status panel
-        public void UpdateStatusUI(bool isTrailing, TradeType? armedTradeType)
+        public void UpdateStatusUI(bool isTrail, OrderType? orderType)
         {
+            // cache for click handler
+            currentOrderType = orderType;
+            bool enabled = getEnableTrading();
             // trading block
-            if (enableTrading && armedTradeType.HasValue)
+            if (enabled && orderType.HasValue && (orderType.Value == OrderType.buy || orderType.Value == OrderType.sell))
             {
-                tradingBlock.Text = "trading";
-                tradingBlock.ForegroundColor = armedTradeType.Value == TradeType.Buy ?
-                AumStyle.clrBuy : AumStyle.clrSell;
+                btnTrade.BackgroundColor = orderType.Value == OrderType.buy ? AumStyle.clrBuy : AumStyle.clrSell;
             }
             else
             {
-                tradingBlock.Text = "not trading";
-                tradingBlock.ForegroundColor = AumStyle.clrInactive;
+                // indicate alert or close order
+                btnTrade.BackgroundColor = orderType.Value switch
+                {
+                    OrderType.alertBuy or OrderType.alertSell => AumStyle.clrAlert,
+                    OrderType.closeBuy or OrderType.closeSell => AumStyle.clrClose,
+                    _ => AumStyle.clrInactive
+                };
             }
-            // trailing block
-            if (isTrailing)
+            // trail button 
+            if (isTrail && orderType.HasValue && orderType.Value != OrderType.none)
             {
-                trailingBlock.Text = "trailing";
-                trailingBlock.ForegroundColor = armedTradeType == TradeType.Buy ? AumStyle.clrBuy : AumStyle.clrSell;
-            }
-            else
-            {
-                trailingBlock.Text = "not trailing";
-                trailingBlock.ForegroundColor = AumStyle.clrInactive;
+                btnTrail.BackgroundColor = orderType.Value switch
+                {
+                    OrderType.buy => AumStyle.clrBuy,
+                    OrderType.sell => AumStyle.clrSell,
+                    _ => AumStyle.clrInactive
+                };
             }
         }
     }

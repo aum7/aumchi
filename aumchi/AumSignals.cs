@@ -3,7 +3,6 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using cAlgo.API;
-using System.Runtime.InteropServices;
 
 namespace Aumchi
 {
@@ -41,7 +40,6 @@ namespace Aumchi
         private readonly AumUI ui;
         private readonly Dictionary<string, LineOrderSpecs> orderLinesDict = new();
         private ChartStaticText botText;
-        private TradeType? armedTradeType;
         public event Action<Signal> OnSignal;
         public AumSignals(Robot robot, bool triggerOrderOnce, double trailOrderLinePips, int trailOrderLineBarsBack, TimeFrame trailOrderLineTf, string soundFile, AumUI ui)
         {
@@ -96,6 +94,8 @@ namespace Aumchi
             // update color based on order
             if (isTriggered) line.Color = AumStyle.clrInactive;
             else SetLineColor(order_line);
+            // manage trade & trail text / button
+            ui.UpdateStatusUI(isTrail, orderType);
         }
         private OrderType ParseOrderType(string comment)
         {
@@ -104,27 +104,22 @@ namespace Aumchi
             if (words.Contains("close") && words.Contains("sell")) return OrderType.closeSell;
             if (words.Contains("alert") && words.Contains("buy"))
             {
-                // armedTradeType = TradeType.Buy;
                 return OrderType.alertBuy;
             }
             if (words.Contains("alert") && words.Contains("sell"))
             {
-                // armedTradeType = TradeType.Sell;
                 return OrderType.alertSell;
             }
             if (words.Contains("buy"))
             {
-                armedTradeType = TradeType.Buy;
                 return OrderType.buy;
             }
             if (words.Contains("sell"))
             {
-                armedTradeType = TradeType.Sell;
                 return OrderType.sell;
             }
             if (words.Contains("hit"))
             {
-                armedTradeType = null;
                 return OrderType.none;
             }
             return OrderType.none;
@@ -154,8 +149,6 @@ namespace Aumchi
         {
             if (!orderLinesDict.Remove(lineName, out var spec)) return;
             robot.Print($"removed order line '{lineName}'");
-            // todo correct place to reset armedtradetype ???
-            armedTradeType = null;
             // if trailing line was removed, update chart text
             if (spec.IsTrail && !orderLinesDict.Values.Any(l => l.IsTrail) && botText != null)
             {
@@ -167,22 +160,17 @@ namespace Aumchi
         public void Update()
         {
             // debug
-            // robot.Print($"aumchi : armedtradetype : {armedTradeType}");
-            bool isAnyLineTrailing = false;
             foreach (var order_line in orderLinesDict.Values)
             {
                 if (order_line.IsTrail)
                 {
                     UpdateTrailLine(order_line);
-                    isAnyLineTrailing = true;
                 }
                 if (order_line.OrderType != OrderType.none)
                 {
                     CheckLineCross(order_line);
                 }
             }
-            // manage trail text
-            ui.UpdateStatusUI(isAnyLineTrailing, armedTradeType);
         }
         // if trend line has comment recognized as order, update ontick
         private void UpdateTrailLine(LineOrderSpecs order_line)
