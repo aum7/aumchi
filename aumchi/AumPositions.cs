@@ -20,12 +20,20 @@ namespace Aumchi
             foreach (var pos in robot.Positions)
             {
                 if (pos.Label != label) continue;
-                // debug todo
-                robot.Print($"{DateTime.UtcNow} (utc) {label} : position : {pos.SymbolName} | {pos.TradeType} | {pos.VolumeInUnits}");
-                if (pos.TradeType == TradeType.Buy && signal.Kind == SignalKind.closeBuySignal)
-                    robot.ClosePosition(pos);
-                else if (pos.TradeType == TradeType.Sell && signal.Kind == SignalKind.closeSellSignal)
-                    robot.ClosePosition(pos);
+
+                bool canClose = (pos.TradeType == TradeType.Buy && signal.Kind == SignalKind.closeBuySignal) || (pos.TradeType == TradeType.Sell && signal.Kind == SignalKind.closeSellSignal);
+                if (!canClose) continue;
+                var result = robot.ClosePosition(pos);
+                var time = DateTime.UtcNow;
+                if (result.IsSuccessful)
+                {
+                    var price = result.Position?.CurrentPrice;
+                    robot.Print($"{time} (utc) {label} : closed position @ {price}");
+                    // debug
+                    Console.WriteLine($"[debug] result type : {result.GetType()}");
+                    foreach (var prop in result.GetType().GetProperties()) Console.WriteLine($"prop : {prop.Name} | value : {prop.GetValue(result)}");
+                }
+                else robot.Print($"{time} (utc) {label} : close order execution failed : {result.Error}");
             }
         }
     }
