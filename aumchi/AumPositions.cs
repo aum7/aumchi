@@ -24,16 +24,17 @@ namespace Aumchi
                 bool canClose = (pos.TradeType == TradeType.Buy && signal.Kind == SignalKind.closeBuySignal) || (pos.TradeType == TradeType.Sell && signal.Kind == SignalKind.closeSellSignal);
                 if (!canClose) continue;
                 var result = robot.ClosePosition(pos);
-                var time = DateTime.UtcNow;
+                DateTime closeTime = DateTime.UtcNow;
                 if (result.IsSuccessful)
                 {
+                    // double closePrice = pos.TradeType == TradeType.Buy ? robot.Symbol.Bid : robot.Symbol.Ask;
                     var price = result.Position?.CurrentPrice;
-                    robot.Print($"{time} (utc) {label} : closed position @ {price}");
+                    robot.Print($"{closeTime} (utc) {label} : closed position @ {price}");
                     // debug
                     Console.WriteLine($"[debug] result type : {result.GetType()}");
                     foreach (var prop in result.GetType().GetProperties()) Console.WriteLine($"prop : {prop.Name} | value : {prop.GetValue(result)}");
                 }
-                else robot.Print($"{time} (utc) {label} : close order execution failed : {result.Error}");
+                else robot.Print($"{closeTime} (utc) {label} : close order execution failed : {result.Error}");
             }
         }
     }
