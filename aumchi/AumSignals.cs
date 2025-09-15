@@ -38,9 +38,11 @@ namespace Aumchi
         private readonly TimeFrame trailOrderLineTf;
         private readonly string soundFile;
         private readonly AumUI ui;
+        private readonly AumTrail trail;
+
         private readonly Dictionary<string, LineOrderSpecs> orderLinesDict = new();
-        private ChartStaticText botText;
         public event Action<Signal> OnSignal;
+        // functions
         public AumSignals(Robot robot, bool triggerOrderOnce, double trailOrderLinePips, int trailOrderLineBarsBack, TimeFrame trailOrderLineTf, string soundFile, AumUI ui)
         {
             this.robot = robot;
@@ -49,7 +51,23 @@ namespace Aumchi
             this.trailOrderLineBarsBack = trailOrderLineBarsBack;
             this.trailOrderLineTf = trailOrderLineTf;
             this.soundFile = soundFile;
+            this.trail = new AumTrail(
+                robot,
+                trailOrderLinePips,
+                trailOrderLineBarsBack,
+                trailOrderLineTf);
             this.ui = ui;
+        }
+        public OrderType? GetTradingStatus()
+        {
+            var active = orderLinesDict.Values.FirstOrDefault(o => o.OrderType != OrderType.none && !o.IsTrail);
+            return active?.OrderType;
+        }
+        //GetTrailStatus
+        public OrderType? GetTrailStatus()
+        {
+            var active = orderLinesDict.Values.FirstOrDefault(o => o.IsTrail);
+            return active?.OrderType;
         }
         // called on init
         public void ScanLinesOnChart()
@@ -59,7 +77,7 @@ namespace Aumchi
                 TLineUpdate(line);
             }
         }
-        // chart events monitor
+        // chart events monitor : check trend lines
         public void TLineUpdate(ChartTrendLine line)
         {
             if (line == null) return;
@@ -95,18 +113,21 @@ namespace Aumchi
             if (isTriggered) line.Color = AumStyle.clrInactive;
             else SetLineColor(order_line);
             // manage trade & trail text / button
-            ui.UpdateStatusUI(isTrail, orderType);
+            ui.UpdateStatusUI(
+                order_line.OrderType != OrderType.none,
+                order_line.OrderType != OrderType.none ? order_line.OrderType : null,
+                order_line.IsTrail ? order_line.OrderType : null);
         }
         private OrderType ParseOrderType(string comment)
         {
             var words = comment.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (words.Contains("close") && words.Contains("buy")) return OrderType.closeBuy;
-            if (words.Contains("close") && words.Contains("sell")) return OrderType.closeSell;
-            if (words.Contains("alert") && words.Contains("buy"))
+            if (words.Contains("buy") && words.Contains("close")) return OrderType.closeBuy;
+            if (words.Contains("sell") && words.Contains("close")) return OrderType.closeSell;
+            if (words.Contains("buy") && words.Contains("alert"))
             {
                 return OrderType.alertBuy;
             }
-            if (words.Contains("alert") && words.Contains("sell"))
+            if (words.Contains("sell") && words.Contains("alert"))
             {
                 return OrderType.alertSell;
             }
@@ -148,13 +169,9 @@ namespace Aumchi
         public void StopTrackingLine(string lineName)
         {
             if (!orderLinesDict.Remove(lineName, out var spec)) return;
-            robot.Print($"removed order line '{lineName}'");
-            // if trailing line was removed, update chart text
-            if (spec.IsTrail && !orderLinesDict.Values.Any(l => l.IsTrail) && botText != null)
-            {
-                robot.Chart.RemoveObject("trailInfo");
-                botText = null;
-            }
+            robot.Print($"removed order line '{lineName}' from dict");
+            // pass inactive state to ui
+            ui.UpdateStatusUI(false, null, null);
         }
         // called each tick : iterate tracked lines with order
         public void Update()
@@ -164,87 +181,11 @@ namespace Aumchi
             {
                 if (order_line.IsTrail)
                 {
-                    UpdateTrailLine(order_line);
+                    trail.UpdateTrailLine(order_line);
                 }
                 if (order_line.OrderType != OrderType.none)
                 {
                     CheckLineCross(order_line);
-                }
-            }
-        }
-        // if trend line has comment recognized as order, update ontick
-        private void UpdateTrailLine(LineOrderSpecs order_line)
-        {
-            if (!order_line.IsTrail) return;
-            // set t-line horizontal for visual recognition of order
-            order_line.Line.Y1 = order_line.Line.Y2;
-            double marketPrice = order_line.OrderType is OrderType.buy or OrderType.alertBuy ? robot.Symbol.Ask : robot.Symbol.Bid;
-            double marketPriceClose = order_line.OrderType is OrderType.closeBuy ? robot.Symbol.Bid : robot.Symbol.Ask;
-            double trailLevel;
-            // trail with pips
-            if (trailOrderLinePips > 0)
-            {
-                double offset = trailOrderLinePips * robot.Symbol.PipSize;
-                if (order_line.OrderType is OrderType.buy or OrderType.alertBuy)
-                {
-                    trailLevel = order_line.Line.Y1 - offset;
-                    if (marketPrice < trailLevel)
-                        order_line.Line.Y1 = order_line.Line.Y2 = marketPrice + offset;
-                }
-                else if (order_line.OrderType is OrderType.sell or OrderType.alertSell)
-                {
-                    trailLevel = order_line.Line.Y1 + offset;
-                    if (marketPrice > trailLevel)
-                        order_line.Line.Y1 = order_line.Line.Y2 = marketPrice - offset;
-                }
-                // close orders
-                else if (order_line.OrderType is OrderType.closeBuy)
-                {
-                    trailLevel = order_line.Line.Y1 + offset;
-                    if (marketPriceClose > trailLevel)
-                        order_line.Line.Y1 = order_line.Line.Y2 = marketPriceClose - offset;
-                }
-                else if (order_line.OrderType is OrderType.closeSell)
-                {
-                    trailLevel = order_line.Line.Y1 - offset;
-                    if (marketPriceClose < trailLevel)
-                        order_line.Line.Y1 = order_line.Line.Y2 = marketPriceClose + offset;
-                }
-            }
-            // trail x bars back on x timeframe
-            else
-            {
-                var bars = robot.MarketData.GetBars(trailOrderLineTf);
-                int barsAvailable = bars.Count;
-                int lookbackPeriod = Math.Min(trailOrderLineBarsBack, barsAvailable - 1);
-                // exit if no valid period
-                if (lookbackPeriod <= 0) return;
-                // get trail level / price based on trade direction
-                if (order_line.OrderType is OrderType.buy or OrderType.alertBuy)
-                {
-                    // get highest price of last x bars back
-                    trailLevel = bars.HighPrices.Skip(barsAvailable - 1 - lookbackPeriod).Take(lookbackPeriod).Max();
-                    if (marketPrice < trailLevel)
-                        order_line.Line.Y1 = order_line.Line.Y2 = trailLevel;
-                }
-                else if (order_line.OrderType is OrderType.sell or OrderType.alertSell)
-                {
-                    // get lowest price for last x bars back
-                    trailLevel = bars.LowPrices.Skip(barsAvailable - 1 - lookbackPeriod).Take(lookbackPeriod).Min();
-                    if (marketPrice > trailLevel)
-                        order_line.Line.Y1 = order_line.Line.Y2 = trailLevel;
-                }
-                else if (order_line.OrderType is OrderType.closeBuy)
-                {
-                    trailLevel = bars.LowPrices.Skip(barsAvailable - 1 - lookbackPeriod).Take(lookbackPeriod).Min();
-                    if (marketPriceClose > trailLevel)
-                        order_line.Line.Y1 = order_line.Line.Y2 = trailLevel;
-                }
-                else if (order_line.OrderType is OrderType.closeSell)
-                {
-                    trailLevel = bars.HighPrices.Skip(barsAvailable - 1 - lookbackPeriod).Take(lookbackPeriod).Max();
-                    if (marketPriceClose < trailLevel)
-                        order_line.Line.Y1 = order_line.Line.Y2 = trailLevel;
                 }
             }
         }
@@ -277,7 +218,11 @@ namespace Aumchi
             // check trigger : buy signal
             if (order_line.OrderType == OrderType.buy && ask > linePrice)
             {
-                var sig = new Signal { Kind = SignalKind.buySignal };
+                var sig = new Signal
+                {
+                    Kind = SignalKind.buySignal,
+                    Price = ask
+                };
                 OnSignal?.Invoke(sig);
                 robot.Print($"{DateTime.UtcNow} (utc) buy hit");
                 wasHit = true;
@@ -290,7 +235,11 @@ namespace Aumchi
             }
             else if (order_line.OrderType == OrderType.sell && bid < linePrice)
             {
-                var sig = new Signal { Kind = SignalKind.sellSignal };
+                var sig = new Signal
+                {
+                    Kind = SignalKind.sellSignal,
+                    Price = bid
+                };
                 OnSignal?.Invoke(sig);
                 robot.Print($"{DateTime.UtcNow} (utc) sell hit");
                 wasHit = true;

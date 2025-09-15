@@ -54,6 +54,21 @@ ie 'buy trail' or 'trail close'")]
         private AumSignals signals;
         private AumTrader trader;
         private AumPositions positions;
+
+        private bool enableTrading;
+        // functions
+        private void ToggleTradingState()
+        {
+            enableTrading = !enableTrading;
+            Print($"trading {(enableTrading ? "enabled" : "disabled")}");
+            UpdateUIState();
+        }
+        private void UpdateUIState()
+        {
+            var tradeStatus = signals.GetTradingStatus();
+            var trailStatus = signals.GetTrailStatus();
+            ui.UpdateStatusUI(enableTrading, tradeStatus, trailStatus);
+        }
         protected override void OnStart()
         {
             Print($"{DateTime.UtcNow} (utc) aumchi started");
@@ -61,7 +76,8 @@ ie 'buy trail' or 'trail close'")]
             // Print($"ticksize : {Symbol.TickSize}"); // 0,01
             // Print($"pipsize : {Symbol.PipSize}"); // 0,1
             // debug end
-            ui = new AumUI(this, () => EnableTrading, v => EnableTrading = v);
+            ui = new AumUI(this);
+            ui.OnTradeButtonClick += ToggleTradingState;
             signals = new AumSignals(this, TriggerOrderOnce, TrailOrderLinePips, TrailOrderLineBarsBack, TrailOrderLineTf, SoundFile, ui);
             signals.OnSignal += HandleSignal;
             trader = new AumTrader(this, EnableTrading, StoplossPips, LotSize);
@@ -74,7 +90,7 @@ ie 'buy trail' or 'trail close'")]
         }
         protected override void OnTick()
         {
-            // keep signal handling separate from trading / management
+            // keep signal handling separate from trading & trailing
             signals.Update();
         }
         private void HandleSignal(Signal signal)

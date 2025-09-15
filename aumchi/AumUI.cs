@@ -7,22 +7,17 @@ namespace Aumchi
     public class AumUI
     {
         private readonly Robot robot;
-        private readonly Func<bool> getEnableTrading;
-        private readonly Action<bool> setEnableTrading;
-        // cache status to refresh ui after toggle
-        private OrderType? currentOrderType;
         // status panel / ui
         private StackPanel statusPanel;
         private Button btnTrade;
         private Button btnTrail;
 
-        public AumUI(Robot robot, Func<bool> getEnableTrading, Action<bool> setEnableTrading)
+        public event Action OnTradeButtonClick;
+        public AumUI(Robot robot)
         {
             this.robot = robot;
-            this.getEnableTrading = getEnableTrading;
-            this.setEnableTrading = setEnableTrading;
             InitStatusUI();
-            UpdateStatusUI(false, null);
+            UpdateStatusUI(false, null, null);
         }
         // initialize status panel
         private void InitStatusUI()
@@ -39,13 +34,7 @@ namespace Aumchi
                 BackgroundColor = AumStyle.clrInactive,
                 Margin = new Thickness(0, 0, 0, 5)
             };
-            btnTrade.Click += delegate
-            {
-                // toggle enable trading
-                bool newVal = !getEnableTrading();
-                setEnableTrading(newVal);
-                UpdateStatusUI(false, null);
-            };
+            btnTrade.Click += (args) => OnTradeButtonClick?.Invoke();
             btnTrail = new Button
             {
                 Text = "TRAIL",
@@ -57,36 +46,30 @@ namespace Aumchi
             robot.Chart.AddControl(statusPanel);
         }
         // update status panel
-        public void UpdateStatusUI(bool isTrail, OrderType? orderType)
+        public void UpdateStatusUI(bool enableTrading, OrderType? tradeType, OrderType? trailType)
         {
+            // early exit
+            if (btnTrade == null || btnTrail == null) return;
             // cache for click handler
-            currentOrderType = orderType;
-            bool enabled = getEnableTrading();
-            // trading block
-            if (enabled && orderType.HasValue && (orderType.Value == OrderType.buy || orderType.Value == OrderType.sell))
+            if (enableTrading && tradeType.HasValue && (tradeType == OrderType.buy || tradeType == OrderType.sell))
             {
-                btnTrade.BackgroundColor = orderType.Value == OrderType.buy ? AumStyle.clrBuy : AumStyle.clrSell;
+                btnTrade.BackgroundColor = enableTrading
+                    ? AumStyle.clrBuy
+                    : AumStyle.clrInactive;
+                // btnTrade.BackgroundColor = tradeType == OrderType.buy ? AumStyle.clrBuy : AumStyle.clrSell;
             }
-            else
+            else btnTrade.BackgroundColor = AumStyle.clrInactive;
+            if (trailType.HasValue)
             {
-                // indicate alert or close order
-                btnTrade.BackgroundColor = orderType.Value switch
-                {
-                    OrderType.alertBuy or OrderType.alertSell => AumStyle.clrAlert,
-                    OrderType.closeBuy or OrderType.closeSell => AumStyle.clrClose,
-                    _ => AumStyle.clrInactive
-                };
-            }
-            // trail button 
-            if (isTrail && orderType.HasValue && orderType.Value != OrderType.none)
-            {
-                btnTrail.BackgroundColor = orderType.Value switch
+                btnTrail.BackgroundColor = trailType switch
                 {
                     OrderType.buy => AumStyle.clrBuy,
                     OrderType.sell => AumStyle.clrSell,
+                    OrderType.alertBuy or OrderType.alertSell => AumStyle.clrAlert,
                     _ => AumStyle.clrInactive
                 };
             }
+            else btnTrail.BackgroundColor = AumStyle.clrInactive;
         }
     }
 }

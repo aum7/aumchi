@@ -37,11 +37,21 @@ namespace Aumchi
                     robot.Print($"{DateTime.UtcNow} (utc) aumchi : unknown signal ({signal.Kind})");
                     return;
             }
+            double? stoploss = null;
+            if (stoplossPips > 0)
+            {
+                // double slOffset = stoplossPips * robot.Symbol.PipSize;
+                // stoploss = tradeType == TradeType.Buy
+                // ? signal.Price - slOffset
+                // : signal.Price + slOffset;
+                stoploss = stoplossPips > 0 ? (tradeType == TradeType.Buy ? signal.Price - stoplossPips : signal.Price + stoplossPips) : (double?)null;
+            }
             long volume = (long)Math.Max(1, robot.Symbol.QuantityToVolumeInUnits(lotSize));
-            double? stoploss = stoplossPips > 0 ? (tradeType == TradeType.Buy ? signal.Price - stoplossPips : signal.Price + stoplossPips) : (double?)null;
 
             var result = robot.ExecuteMarketOrder(tradeType, robot.SymbolName, volume, label, stoploss, null);
+
             if (result.IsSuccessful) robot.Print($"{DateTime.UtcNow} (utc) aumchi : executed {tradeType} @ {result.Position.EntryPrice}");
+
             else robot.Print($"{DateTime.UtcNow} (utc) aumchi : market order execution failed : {result.Error}");
         }
     }
