@@ -40,8 +40,8 @@ namespace Aumchi
             double? stoploss = null;
             if (stoplossPips > 0)
             {
+                // below gives unexpected results
                 // double slOffset = stoplossPips * robot.Symbol.PipSize;
-                // stoploss = tradeType == TradeType.Buy
                 // ? signal.Price - slOffset
                 // : signal.Price + slOffset;
                 stoploss = stoplossPips > 0 ? (tradeType == TradeType.Buy ? signal.Price - stoplossPips : signal.Price + stoplossPips) : (double?)null;
