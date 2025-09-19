@@ -46,26 +46,30 @@ namespace Aumchi
             robot.Chart.AddControl(statusPanel);
         }
         // update status panel
-        public void UpdateStatusUI(bool enableTrading, OrderType? tradeType, OrderType? trailType)
+        public void UpdateStatusUI(bool EnableTrading, OrderType? tradeType, OrderType? trailType)
         {
             // early exit
             if (btnTrade == null || btnTrail == null) return;
-            // cache for click handler
-            if (enableTrading && tradeType.HasValue && (tradeType == OrderType.buy || tradeType == OrderType.sell))
+            // trade button
+            if (!EnableTrading) btnTrade.BackgroundColor = AumStyle.clrInactive;
+            else
             {
-                btnTrade.BackgroundColor = enableTrading
+                if (tradeType == null || tradeType == OrderType.none)
+                    btnTrade.BackgroundColor = AumStyle.clrTradingEnabled;
+                else
+                {
+                    btnTrade.BackgroundColor = tradeType == OrderType.buy
                     ? AumStyle.clrBuy
-                    : AumStyle.clrInactive;
-                // btnTrade.BackgroundColor = tradeType == OrderType.buy ? AumStyle.clrBuy : AumStyle.clrSell;
+                    : AumStyle.clrSell;
+                    ;
+                }
             }
-            else btnTrade.BackgroundColor = AumStyle.clrInactive;
             if (trailType.HasValue)
             {
                 btnTrail.BackgroundColor = trailType switch
                 {
-                    OrderType.buy => AumStyle.clrBuy,
-                    OrderType.sell => AumStyle.clrSell,
-                    OrderType.alertBuy or OrderType.alertSell => AumStyle.clrAlert,
+                    OrderType.alertBuy or OrderType.closeBuy => AumStyle.clrBuy,
+                    OrderType.alertSell or OrderType.closeSell => AumStyle.clrSell,
                     _ => AumStyle.clrInactive
                 };
             }

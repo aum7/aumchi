@@ -11,6 +11,7 @@ namespace Aumchi
         public static readonly Color clrAlert = Color.Magenta;
         public static readonly Color clrClose = Color.LimeGreen;
         public static readonly Color clrInactive = Color.DarkGray;
+        public static readonly Color clrTradingEnabled = Color.Gold;
     }
     [Robot(AccessRights = AccessRights.None)]
     public class Aumchi : Robot
@@ -28,13 +29,15 @@ available orders :
 - alert (magenta)
 - trail : will trail t-line as horizontal line
 trail is used in combination with order
-ie 'buy trail' or 'trail close'")]
+ie 'buy trail' or 'trail close buy'")]
         public string ManualText { get; set; }
         [Parameter("enable trading", DefaultValue = false)]
         public bool EnableTrading { get; set; }
         // only trigger line order once
         [Parameter("trigger line only once", DefaultValue = true)]
         public bool TriggerOrderOnce { get; set; }
+        [Parameter("single trade only", DefaultValue = true)]
+        public bool SingleTradeOnly { get; set; }
         // if set to 0 > use x bars back instead of pips
         [Parameter("trail order line pips", DefaultValue = 41.0)]
         public double TrailOrderLinePips { get; set; }
@@ -54,20 +57,18 @@ ie 'buy trail' or 'trail close'")]
         private AumSignals signals;
         private AumTrader trader;
         private AumPositions positions;
-
-        private bool enableTrading;
         // functions
         private void ToggleTradingState()
         {
-            enableTrading = !enableTrading;
-            Print($"trading {(enableTrading ? "enabled" : "disabled")}");
+            EnableTrading = !EnableTrading;
+            Print($"trading {(EnableTrading ? "enabled" : "disabled")}");
             UpdateUIState();
         }
         private void UpdateUIState()
         {
             var tradeStatus = signals.GetTradingStatus();
             var trailStatus = signals.GetTrailStatus();
-            ui.UpdateStatusUI(enableTrading, tradeStatus, trailStatus);
+            ui.UpdateStatusUI(EnableTrading, tradeStatus, trailStatus);
         }
         protected override void OnStart()
         {
@@ -78,15 +79,24 @@ ie 'buy trail' or 'trail close'")]
             // debug end
             ui = new AumUI(this);
             ui.OnTradeButtonClick += ToggleTradingState;
-            signals = new AumSignals(this, TriggerOrderOnce, TrailOrderLinePips, TrailOrderLineBarsBack, TrailOrderLineTf, SoundFile, ui);
+            signals = new AumSignals(
+                this,
+                () => EnableTrading,
+                TriggerOrderOnce,
+                TrailOrderLinePips,
+                TrailOrderLineBarsBack,
+                TrailOrderLineTf,
+                SoundFile,
+                ui);
             signals.OnSignal += HandleSignal;
-            trader = new AumTrader(this, EnableTrading, StoplossPips, LotSize);
+            trader = new AumTrader(this, () => EnableTrading, SingleTradeOnly, StoplossPips, LotSize);
             positions = new AumPositions(this, ui);
             // subscribe to chart object events
             Chart.ObjectsUpdated += Chart_ObjectsUpdated;
             Chart.ObjectsRemoved += Chart_ObjectsRemoved;
             // initialize lines already on chart
             signals.ScanLinesOnChart();
+            UpdateUIState();
         }
         protected override void OnTick()
         {
@@ -121,9 +131,7 @@ ie 'buy trail' or 'trail close'")]
             foreach (var chartObject in args.ChartObjects)
             {
                 if (chartObject.ObjectType is ChartObjectType.TrendLine)
-                {
                     signals.StopTrackingLine(chartObject.Name);
-                }
             }
         }
     }
