@@ -11,9 +11,9 @@ namespace Aumchi
         public static readonly Color clrAlert = Color.Magenta;
         public static readonly Color clrClose = Color.LimeGreen;
         public static readonly Color clrInactive = Color.DarkGray;
-        public static readonly Color clrTradingEnabled = Color.Gold;
+        public static readonly Color clrTradingEnabled = Color.DarkGreen;
     }
-    [Robot(AccessRights = AccessRights.None)]
+    [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.None)]
     public class Aumchi : Robot
     {
         // external parameters
@@ -29,7 +29,11 @@ available orders :
 - alert (magenta)
 - trail : will trail t-line as horizontal line
 trail is used in combination with order
-ie 'buy trail' or 'trail close buy'")]
+ie 'buy trail' or 'trail close buy'
+ctrl+left click > draw breakout line
+shift+left click > draw retracement line
+detection of trade direction when clicked
+above / below market price")]
         public string ManualText { get; set; }
         [Parameter("enable trading", DefaultValue = false)]
         public bool EnableTrading { get; set; }
@@ -57,6 +61,7 @@ ie 'buy trail' or 'trail close buy'")]
         private AumSignals signals;
         private AumTrader trader;
         private AumPositions positions;
+        private SignalLines signalLines;
         // functions
         private void ToggleTradingState()
         {
@@ -91,6 +96,9 @@ ie 'buy trail' or 'trail close buy'")]
             signals.OnSignal += HandleSignal;
             trader = new AumTrader(this, () => EnableTrading, SingleTradeOnly, StoplossPips, LotSize);
             positions = new AumPositions(this, ui);
+            // modified linestrader
+            signalLines = new SignalLines(this);
+            signalLines.Init();
             // subscribe to chart object events
             Chart.ObjectsUpdated += Chart_ObjectsUpdated;
             Chart.ObjectsRemoved += Chart_ObjectsRemoved;
@@ -102,6 +110,19 @@ ie 'buy trail' or 'trail close buy'")]
         {
             // keep signal handling separate from trading & trailing
             signals.Update();
+            // signal lines (trader) logic
+            var lastBarIndex = Bars.Count - 1;
+            foreach (var signalLine in signalLines.SignalLineRepo.GetLines())
+                if (signalLine.CanExecute(Bid, lastBarIndex))
+                {
+                    signalLine.MarkAsExecuted();
+                    Print($"{Time} - signal lines : {signalLine.TradeType}-{signalLine.SignalType} was executed on {SymbolName}");
+                    var sig = new Signal
+                    {
+                        Kind = signalLine.TradeType == TradeType.Buy ? SignalKind.buySignal : SignalKind.sellSignal
+                    };
+                    trader.ManageEntry(sig);
+                }
         }
         private void HandleSignal(Signal signal)
         {
@@ -110,6 +131,9 @@ ie 'buy trail' or 'trail close buy'")]
         }
         protected override void OnStop()
         {
+            // clear signal lines (trader) code
+            signalLines.SignalLineRepo.Dispose();
+            signalLines.DrawManager.Dispose();
             // unsubscribe all events
             Chart.ObjectsUpdated -= Chart_ObjectsUpdated;
             Chart.ObjectsRemoved -= Chart_ObjectsRemoved;

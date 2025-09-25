@@ -26,9 +26,9 @@ namespace Aumchi
     {
         public SignalKind Kind { get; set; }
         public TradeType Type { get; set; }
-        public double Price { get; set; }
         public string Message { get; set; }
-        public string LineName { get; set; }
+        // public double Price { get; set; }
+        // public string LineName { get; set; }
     }
     public class AumSignals
     {
@@ -213,26 +213,27 @@ namespace Aumchi
             // if line already triggered : return
             if (triggerOrderOnce && order_line.IsTriggered) return;
             // trendline end checked : if in past > dont execute orders
-            var lastBarTime = robot.Bars.Last(1).OpenTime;
+            int lastBar = robot.Bars.Count - 1;
+            // todo debug
+            robot.Print($"lastBar : {lastBar}");
+            DateTime now = robot.Server.Time;
             DateTime orderStartTime = order_line.Line.Time1;
             DateTime orderEndTime = order_line.Line.Time2;
-            // line not yet active
-            if (lastBarTime < orderStartTime) return;
-            // line expired
-            if (lastBarTime >= orderEndTime)
+            // trendline lifetime
+            if (now < orderStartTime || now > orderEndTime)
             {
-                StopTrackingLine(order_line.Line.Name);
-                robot.Print($"t-line '{order_line.Line.Name}' expired at {order_line.Line.Time2} : removed from tracked lines");
+                if (now > orderEndTime)
+                {
+                    StopTrackingLine(order_line.Line.Name);
+                    robot.Print($"t-line '{order_line.Line.Name}' expired at {order_line.Line.Time2} : removed from tracked lines");
+                }
                 return;
             }
             // check line triggered : current price
             double bid = robot.Symbol.Bid;
             double ask = robot.Symbol.Ask;
             // interpolate line price if not horizontal
-            double y1 = order_line.Line.Y1;
-            double y2 = order_line.Line.Y2;
-            double lineSlope = (y2 - y1) / (orderEndTime - orderStartTime).TotalSeconds;
-            double linePrice = y1 + lineSlope * (lastBarTime - orderStartTime).TotalSeconds;
+            double linePrice = order_line.Line.CalculateY(lastBar);
             // check trigger : buy signal
             if (order_line.OrderType == OrderType.buy && ask > linePrice)
             {
