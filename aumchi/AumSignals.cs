@@ -215,7 +215,7 @@ namespace Aumchi
             // trendline end checked : if in past > dont execute orders
             int lastBar = robot.Bars.Count - 1;
             // todo debug
-            robot.Print($"lastBar : {lastBar}");
+            // robot.Print($"lastBar : {lastBar}");
             DateTime now = robot.Server.Time;
             DateTime orderStartTime = order_line.Line.Time1;
             DateTime orderEndTime = order_line.Line.Time2;

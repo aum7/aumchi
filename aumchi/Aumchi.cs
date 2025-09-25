@@ -77,7 +77,7 @@ above / below market price")]
         }
         protected override void OnStart()
         {
-            Print($"{DateTime.UtcNow} (utc) aumchi started");
+            Print($"{DateTime.UtcNow} (utc) aumchi started : trading {(EnableTrading ? "enabled" : "disabled")}");
             // debug
             // Print($"ticksize : {Symbol.TickSize}"); // 0,01
             // Print($"pipsize : {Symbol.PipSize}"); // 0,1
@@ -116,7 +116,7 @@ above / below market price")]
                 if (signalLine.CanExecute(Bid, lastBarIndex))
                 {
                     signalLine.MarkAsExecuted();
-                    Print($"{Time} - signal lines : {signalLine.TradeType}-{signalLine.SignalType} was executed on {SymbolName}");
+                    Print($"aumchi > signal lines : {signalLine.TradeType} {signalLine.SignalType} was executed @ {Bid}");
                     var sig = new Signal
                     {
                         Kind = signalLine.TradeType == TradeType.Buy ? SignalKind.buySignal : SignalKind.sellSignal
