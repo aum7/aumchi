@@ -103,7 +103,7 @@ namespace Aumchi
             // hit marks inactive
             bool isTrail = comment.Contains("trail");
             bool isTriggered = comment.Contains("hit");
-            // remover invalid lines
+            // remove invalid lines
             if (orderType == OrderType.none && !isTrail)
             {
                 StopTrackingLine(line.Name);
@@ -214,7 +214,11 @@ namespace Aumchi
             if (triggerOrderOnce && order_line.IsTriggered) return;
             // trendline end checked : if in past > dont execute orders
             var lastBarTime = robot.Bars.Last(1).OpenTime;
-            var orderEndTime = order_line.Line.Time2;
+            DateTime orderStartTime = order_line.Line.Time1;
+            DateTime orderEndTime = order_line.Line.Time2;
+            // line not yet active
+            if (lastBarTime < orderStartTime) return;
+            // line expired
             if (lastBarTime >= orderEndTime)
             {
                 StopTrackingLine(order_line.Line.Name);
@@ -225,14 +229,10 @@ namespace Aumchi
             double bid = robot.Symbol.Bid;
             double ask = robot.Symbol.Ask;
             // interpolate line price if not horizontal
-            DateTime t1 = order_line.Line.Time1;
-            DateTime t2 = order_line.Line.Time2;
             double y1 = order_line.Line.Y1;
             double y2 = order_line.Line.Y2;
-            double lineSlope = (y2 - y1) / (t2 - t1).TotalSeconds;
-            double linePrice = y1 + lineSlope * (lastBarTime - t1).TotalSeconds;
-
-            // bool wasHit = false;
+            double lineSlope = (y2 - y1) / (orderEndTime - orderStartTime).TotalSeconds;
+            double linePrice = y1 + lineSlope * (lastBarTime - orderStartTime).TotalSeconds;
             // check trigger : buy signal
             if (order_line.OrderType == OrderType.buy && ask > linePrice)
             {
